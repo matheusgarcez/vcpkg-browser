@@ -1,0 +1,13 @@
+{
+  "files": [],
+  "references": [
+    { "path": "packages/shared" },
+    { "path": "packages/db" },
+    { "path": "packages/vcpkg-parser" },
+    { "path": "packages/scoring" },
+    { "path": "packages/github" },
+    { "path": "apps/server" },
+    { "path": "apps/worker" },
+    { "path": "apps/web" }
+  ]
+}

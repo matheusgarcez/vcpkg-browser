@@ -1,0 +1,31 @@
+{
+  "name": "@app/worker",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "build": "tsc -b",
+    "start": "node dist/main.js",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@pkg/db": "workspace:*",
+    "@pkg/github": "workspace:*",
+    "@pkg/scoring": "workspace:*",
+    "@pkg/shared": "workspace:*",
+    "@pkg/vcpkg-parser": "workspace:*",
+    "bree": "^9.2.3",
+    "date-fns": "^4.1.0",
+    "dotenv": "^16.4.7",
+    "drizzle-orm": "^0.38.3",
+    "octokit": "^4.1.2",
+    "p-queue": "^8.1.0",
+    "simple-git": "^3.27.0",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.3",
+    "typescript": "^5.7.3"
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "name": "vcpkg-browser",
+  "private": true,
+  "packageManager": "pnpm@11.1.0",
+  "engines": {
+    "node": "24.15.x"
+  },
+  "scripts": {
+    "dev": "turbo run dev --filter=\"./apps/*\"",
+    "dev:web": "turbo run dev --filter=@app/web",
+    "dev:server": "turbo run dev --filter=@app/server",
+    "dev:worker": "turbo run dev --filter=@app/worker",
+    "build:packages": "turbo run build --filter=\"./packages/*\"",
+    "build:web": "turbo run build --filter=@app/web",
+    "build:server": "turbo run build --filter=@app/server",
+    "build:worker": "turbo run build --filter=@app/worker",
+    "build": "turbo run build",
+    "start:worker": "pnpm --filter @app/worker start",
+    "typecheck": "turbo run typecheck",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "db:generate": "pnpm --filter @pkg/db exec drizzle-kit generate",
+    "db:migrate": "pnpm --filter @pkg/db exec drizzle-kit migrate",
+    "job": "pnpm build:packages && tsx apps/worker/src/jobs/run-job.ts"
+  },
+  "devDependencies": {
+    "commander": "^14.0.3",
+    "turbo": "^2.5.4",
+    "tsx": "^4.19.3",
+    "typescript": "^5.7.3",
+    "vitest": "^3.1.1"
+  }
+}

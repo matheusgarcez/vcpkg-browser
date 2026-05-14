@@ -1,0 +1,53 @@
+name: vcpkg-browser
+
+x-app-environment: &app-environment
+  NODE_ENV: production
+  HOST: 0.0.0.0
+  PORT: ${PORT:-3000}
+  DATABASE_FILE: /app/data/catalog.sqlite
+  GITHUB_GRAPHQL_ARCHIVE_DIR: /app/data/github-graphql-archive
+  VCPKG_REPO_DIR: /app/data/vcpkg-repo
+  VCPKG_REPO_URL: ${VCPKG_REPO_URL:-https://github.com/microsoft/vcpkg}
+  VCPKG_BRANCH: ${VCPKG_BRANCH:-master}
+  GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+  GITHUB_REFRESH_CONCURRENCY: ${GITHUB_REFRESH_CONCURRENCY:-2}
+  GITHUB_REFRESH_REPOS_PER_MINUTE: ${GITHUB_REFRESH_REPOS_PER_MINUTE:-20}
+  GITHUB_FULL_REFRESH_BATCH_SIZE: ${GITHUB_FULL_REFRESH_BATCH_SIZE:-20}
+  WEB_DIST_DIR: /app/apps/web/dist
+
+x-app-base: &app-base
+  image: vcpkg-browser:local
+  working_dir: /app
+  environment: *app-environment
+  volumes:
+    - ./data:/app/data
+
+x-app-build: &app-build
+  context: .
+  dockerfile: Dockerfile
+  target: runtime
+
+services:
+  migrate:
+    <<: *app-base
+    build: *app-build
+    command: ["pnpm", "db:migrate"]
+    restart: "no"
+
+  server:
+    <<: *app-base
+    command: ["node", "apps/server/dist/main.js"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    ports:
+      - "${PORT:-3000}:${PORT:-3000}"
+    restart: unless-stopped
+
+  worker:
+    <<: *app-base
+    command: ["node", "apps/worker/dist/main.js"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped

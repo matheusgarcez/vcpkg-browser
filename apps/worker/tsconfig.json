@@ -1,0 +1,27 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "outDir": "dist",
+    "rootDir": "src",
+    "declaration": false,
+    "declarationMap": false,
+    "composite": false,
+    "paths": {
+      "@pkg/db": ["../../packages/db/src/index.ts"],
+      "@pkg/github": ["../../packages/github/src/index.ts"],
+      "@pkg/scoring": ["../../packages/scoring/src/index.ts"],
+      "@pkg/shared": ["../../packages/shared/src/index.ts"],
+      "@pkg/shared/logging": ["../../packages/shared/src/logging.ts"],
+      "@pkg/vcpkg-parser": ["../../packages/vcpkg-parser/src/index.ts"]
+    }
+  },
+  "references": [
+    { "path": "../../packages/db" },
+    { "path": "../../packages/github" },
+    { "path": "../../packages/scoring" },
+    { "path": "../../packages/shared" },
+    { "path": "../../packages/vcpkg-parser" }
+  ],
+  "include": ["src"]
+}

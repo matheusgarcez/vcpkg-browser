@@ -1,0 +1,55 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1778544064603,
+      "tag": "0000_watery_hercules",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1778562619163,
+      "tag": "0001_volatile_genesis",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1778562837279,
+      "tag": "0002_left_agent_brand",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1778587200000,
+      "tag": "0003_clever_sync_marker",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1778600000000,
+      "tag": "0004_tiresome_barracuda",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1778610000000,
+      "tag": "0005_historical_port_snapshots",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1778689225561,
+      "tag": "0006_packaging_signals",
+      "breakpoints": true
+    }
+  ]
+}
