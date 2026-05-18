@@ -18,6 +18,7 @@ import { MaintenanceScorePopover } from "../components/ports/MaintenanceScorePop
 import { PackagingRiskPopover } from "../components/ports/PackagingRiskPopover";
 import { CodeBlock } from "../components/ui/CodeBlock";
 import { CopyButton } from "../components/ui/CopyButton";
+import { markdownSanitizeSchema } from "../lib/markdown";
 import { VCPKG_DEFAULT_BRANCH, VCPKG_REPO_URL } from "@pkg/shared";
 import type {
   DependencyDto,
@@ -577,6 +578,8 @@ function DependenciesTabContent({
 type MarkdownModules = {
   ReactMarkdown: typeof import("react-markdown").default;
   rehypeHighlight: typeof import("rehype-highlight").default;
+  rehypeRaw: typeof import("rehype-raw").default;
+  rehypeSanitize: typeof import("rehype-sanitize").default;
   remarkGfm: typeof import("remark-gfm").default;
 };
 
@@ -587,12 +590,26 @@ function MarkdownContent({ content }: { content: string }) {
     let cancelled = false;
 
     const loadModules = () => {
-      void Promise.all([import("react-markdown"), import("remark-gfm"), import("rehype-highlight")]).then(
-        ([reactMarkdownModule, remarkGfmModule, rehypeHighlightModule]) => {
+      void Promise.all([
+        import("react-markdown"),
+        import("remark-gfm"),
+        import("rehype-highlight"),
+        import("rehype-raw"),
+        import("rehype-sanitize"),
+      ]).then(
+        ([
+          reactMarkdownModule,
+          remarkGfmModule,
+          rehypeHighlightModule,
+          rehypeRawModule,
+          rehypeSanitizeModule,
+        ]) => {
           if (cancelled) return;
           setModules({
             ReactMarkdown: reactMarkdownModule.default,
             rehypeHighlight: rehypeHighlightModule.default,
+            rehypeRaw: rehypeRawModule.default,
+            rehypeSanitize: rehypeSanitizeModule.default,
             remarkGfm: remarkGfmModule.default,
           });
         },
@@ -622,12 +639,12 @@ function MarkdownContent({ content }: { content: string }) {
     );
   }
 
-  const { ReactMarkdown, rehypeHighlight, remarkGfm } = modules;
+  const { ReactMarkdown, rehypeHighlight, rehypeRaw, rehypeSanitize, remarkGfm } = modules;
 
   return (
     <div className="markdown">
       <ReactMarkdown
-        rehypePlugins={[rehypeHighlight]}
+        rehypePlugins={[rehypeRaw, [rehypeSanitize, markdownSanitizeSchema], rehypeHighlight]}
         remarkPlugins={[remarkGfm]}
         components={{
           img: ({ node: _node, ...props }) => (

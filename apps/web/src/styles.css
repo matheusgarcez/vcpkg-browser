@@ -88,6 +88,16 @@ button, a, [role="button"] {
 .markdown a { color: var(--color-primary); text-decoration: none; }
 .markdown a:hover { text-decoration: underline; }
 .markdown strong { color: var(--color-text); font-weight: 600; }
+.markdown kbd {
+  font-family: ui-monospace, "SF Mono", Menlo, Monaco, Consolas, monospace;
+  font-size: 0.82em;
+  color: var(--color-text);
+  background: color-mix(in oklab, var(--color-surface-muted) 88%, white 12%);
+  border: 1px solid var(--color-border);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  padding: 0.08em 0.35em;
+}
 .markdown code {
   font-family: ui-monospace, "SF Mono", Menlo, Monaco, Consolas, monospace;
   font-size: 0.82em;
@@ -175,7 +185,17 @@ button, a, [role="button"] {
 }
 .markdown ul { list-style: disc; }
 .markdown ol { list-style: decimal; }
+.markdown ul.contains-task-list {
+  list-style: none;
+  padding-left: 0.2rem;
+}
 .markdown li { margin-bottom: 0.2rem; }
+.markdown li.task-list-item {
+  list-style: none;
+}
+.markdown li.task-list-item input[type="checkbox"] {
+  margin-right: 0.55rem;
+}
 .markdown li > ul, .markdown li > ol { margin-bottom: 0; }
 .markdown table {
   width: 100%;
@@ -207,3 +227,25 @@ button, a, [role="button"] {
   border-radius: 4px;
   height: auto;
 }
+.markdown details {
+  margin: 0 0 1rem;
+  padding: 0.8rem 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: color-mix(in oklab, var(--color-surface) 72%, var(--color-surface-muted) 28%);
+}
+.markdown summary {
+  cursor: pointer;
+  color: var(--color-text);
+  font-weight: 600;
+}
+.markdown details > :not(summary) {
+  margin-top: 0.85rem;
+}
+.markdown picture {
+  display: block;
+  margin-bottom: 1rem;
+}
+.markdown [align="center"] { text-align: center; }
+.markdown [align="left"] { text-align: left; }
+.markdown [align="right"] { text-align: right; }
