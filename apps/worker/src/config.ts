@@ -31,6 +31,7 @@ const configSchema = z.object({
     path.resolve(PROJECT_ROOT, "data", "vcpkg-repo")
   ),
   GITHUB_TOKEN: z.string().optional(),
+  GITHUB_README_SOURCE_MODE: z.enum(["snapshot", "latest"]).default("snapshot"),
   GITHUB_REFRESH_CONCURRENCY: z.coerce.number().int().min(1).max(4).default(3),
   GITHUB_REFRESH_REPOS_PER_MINUTE: z.coerce.number().int().min(1).max(60).default(40),
   GITHUB_FULL_REFRESH_BATCH_SIZE: z.coerce.number().int().min(1).max(100).default(20),

@@ -57,6 +57,17 @@ describe("parseSourceProvenance", () => {
     expect(result.ref).toBe("v1.2.3");
   });
 
+  it("resolves refs built through string(REPLACE) variables", () => {
+    const result = parseSourceProvenance(`string(REPLACE "." "-" ref "asio-\${VERSION}")
+    vcpkg_from_github(
+      REPO chriskohlhoff/asio
+      REF "\${ref}"
+    )`, { version: "1.32.0" });
+
+    expect(result.quality).toBe("exact-tag");
+    expect(result.ref).toBe("asio-1-32-0");
+  });
+
   it("classifies release asset urls", () => {
     const result = parseSourceProvenance(`vcpkg_download_distfile(archive
       URLS "https://github.com/owner/repo/releases/download/v1.0/repo-v1.0.tar.gz"

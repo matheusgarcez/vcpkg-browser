@@ -46,7 +46,7 @@ const SOURCE_CALL_NAMES = new Set([
   "vcpkg_download_distfile",
 ]);
 
-const VERSION_PLACEHOLDER_RE = /\$\{VERSION\}/g;
+const CMAKE_PLACEHOLDER_RE = /\$\{([^}]+)\}/g;
 const VERSION_TEXT_PLACEHOLDERS = new Set([
   "${VERSION}",
   "${PORT_VERSION}",
@@ -76,28 +76,32 @@ export function parseSourceProvenance(
   portfile: string,
   options?: { version?: string },
 ): ParsedSourceProvenance {
-  const sourceBlock = extractCallBlocks(portfile)
+  const blocks = extractCallBlocks(portfile)
+    .sort((left, right) => left.start - right.start);
+  const sourceBlock = blocks
     .filter((block) => SOURCE_CALL_NAMES.has(block.name))
-    .sort((left, right) => left.start - right.start)[0];
+    [0];
 
   if (!sourceBlock) {
     return unknownProvenance("none", "No explicit source helper detected");
   }
 
+  const variableContext = buildVariableContext(blocks, sourceBlock.start, options?.version);
+
   switch (sourceBlock.name) {
     case "vcpkg_from_github":
-      return parseRepoSourceBlock("github", sourceBlock, options);
+      return parseRepoSourceBlock("github", sourceBlock, variableContext);
     case "vcpkg_from_gitlab":
-      return parseRepoSourceBlock("gitlab", sourceBlock, options);
+      return parseRepoSourceBlock("gitlab", sourceBlock, variableContext);
     case "vcpkg_from_bitbucket":
-      return parseRepoSourceBlock("bitbucket", sourceBlock, options);
+      return parseRepoSourceBlock("bitbucket", sourceBlock, variableContext);
     case "vcpkg_from_sourceforge":
-      return parseSourceforgeBlock(sourceBlock, options);
+      return parseSourceforgeBlock(sourceBlock, variableContext);
     case "vcpkg_from_git":
-      return parseGitSourceBlock(sourceBlock, options);
+      return parseGitSourceBlock(sourceBlock, variableContext);
     case "vcpkg_from_url":
     case "vcpkg_download_distfile":
-      return parseUrlSourceBlock(sourceBlock, options);
+      return parseUrlSourceBlock(sourceBlock, variableContext);
     default:
       return unknownProvenance(sourceBlock.name, "Unsupported source helper");
   }
@@ -106,9 +110,9 @@ export function parseSourceProvenance(
 function parseRepoSourceBlock(
   provider: "github" | "gitlab" | "bitbucket",
   block: CallBlock,
-  options?: { version?: string },
+  variableContext: Map<string, string>,
 ): ParsedSourceProvenance {
-  const repo = extractFirstValue(block.body, "REPO");
+  const repo = resolveKnownPlaceholders(extractFirstValue(block.body, "REPO") ?? "", variableContext);
   const rawRef = extractFirstValue(block.body, "REF");
 
   if (!repo) {
@@ -118,10 +122,10 @@ function parseRepoSourceBlock(
   let baseUrl: string;
   if (provider === "github") {
     const host = extractFirstValue(block.body, "GITHUB_HOST");
-    baseUrl = host ? trimTrailingSlashes(resolveVersionPlaceholders(host, options?.version)) : "https://github.com";
+    baseUrl = host ? trimTrailingSlashes(resolveKnownPlaceholders(host, variableContext)) : "https://github.com";
   } else if (provider === "gitlab") {
     const gitlabUrl = extractFirstValue(block.body, "GITLAB_URL");
-    baseUrl = gitlabUrl ? trimTrailingSlashes(resolveVersionPlaceholders(gitlabUrl, options?.version)) : "https://gitlab.com";
+    baseUrl = gitlabUrl ? trimTrailingSlashes(resolveKnownPlaceholders(gitlabUrl, variableContext)) : "https://gitlab.com";
   } else {
     baseUrl = "https://bitbucket.org";
   }
@@ -133,15 +137,15 @@ function parseRepoSourceBlock(
     normalizedRepoUrl: sourceUrl,
     rawRef,
     detectedFrom: `portfile.${block.name}`,
-    version: options?.version,
+    variableContext,
   });
 }
 
 function parseSourceforgeBlock(
   block: CallBlock,
-  options?: { version?: string },
+  variableContext: Map<string, string>,
 ): ParsedSourceProvenance {
-  const repo = extractFirstValue(block.body, "REPO");
+  const repo = resolveKnownPlaceholders(extractFirstValue(block.body, "REPO") ?? "", variableContext);
   const rawRef = extractFirstValue(block.body, "REF");
   const sourceUrl = repo ? `https://sourceforge.net/p/${repo.replace(/^\/+/, "")}` : undefined;
 
@@ -151,11 +155,11 @@ function parseSourceforgeBlock(
     normalizedRepoUrl: sourceUrl,
     rawRef,
     detectedFrom: `portfile.${block.name}`,
-    version: options?.version,
+    variableContext,
   });
 }
 
-function parseGitSourceBlock(block: CallBlock, options?: { version?: string }): ParsedSourceProvenance {
+function parseGitSourceBlock(block: CallBlock, variableContext: Map<string, string>): ParsedSourceProvenance {
   const rawUrl = extractFirstValue(block.body, "URL");
   const rawRef = extractFirstValue(block.body, "REF");
 
@@ -163,7 +167,7 @@ function parseGitSourceBlock(block: CallBlock, options?: { version?: string }): 
     return unknownProvenance(`portfile.${block.name}`, "Missing URL argument");
   }
 
-  const resolvedUrl = resolveVersionPlaceholders(rawUrl, options?.version);
+  const resolvedUrl = resolveKnownPlaceholders(rawUrl, variableContext);
   if (containsUnresolvedPlaceholder(resolvedUrl)) {
     return unknownProvenance(`portfile.${block.name}`, "Source URL contains unresolved placeholders");
   }
@@ -177,17 +181,17 @@ function parseGitSourceBlock(block: CallBlock, options?: { version?: string }): 
     normalizedRepoUrl,
     rawRef,
     detectedFrom: `portfile.${block.name}`,
-    version: options?.version,
+    variableContext,
   });
 }
 
-function parseUrlSourceBlock(block: CallBlock, options?: { version?: string }): ParsedSourceProvenance {
+function parseUrlSourceBlock(block: CallBlock, variableContext: Map<string, string>): ParsedSourceProvenance {
   const rawUrl = extractFirstValue(block.body, "URL") ?? extractFirstUrlFromUrlsArg(block.body);
   if (!rawUrl) {
     return unknownProvenance(`portfile.${block.name}`, "Missing URL argument");
   }
 
-  const resolvedUrl = resolveVersionPlaceholders(rawUrl, options?.version);
+  const resolvedUrl = resolveKnownPlaceholders(rawUrl, variableContext);
   if (containsUnresolvedPlaceholder(resolvedUrl)) {
     return unknownProvenance(`portfile.${block.name}`, "Source URL contains unresolved placeholders");
   }
@@ -220,9 +224,9 @@ function classifyRepoLikeSource(args: {
   normalizedRepoUrl?: string;
   rawRef?: string | null;
   detectedFrom: string;
-  version?: string;
+  variableContext: Map<string, string>;
 }): ParsedSourceProvenance {
-  const resolvedRef = args.rawRef ? resolveVersionPlaceholders(args.rawRef, args.version) : undefined;
+  const resolvedRef = args.rawRef ? resolveKnownPlaceholders(args.rawRef, args.variableContext) : undefined;
   if (!resolvedRef) {
     return {
       provider: args.provider,
@@ -519,9 +523,86 @@ function extractArgumentSegment(body: string, key: string): string | null {
   return match?.[2]?.trim() ?? null;
 }
 
-function resolveVersionPlaceholders(input: string, version?: string): string {
-  if (!version) return input;
-  return input.replace(VERSION_PLACEHOLDER_RE, version);
+function buildVariableContext(
+  blocks: CallBlock[],
+  stopBefore: number,
+  version?: string,
+): Map<string, string> {
+  const variables = new Map<string, string>();
+  if (version) {
+    variables.set("VERSION", version);
+  }
+
+  for (const block of blocks) {
+    if (block.start >= stopBefore) {
+      break;
+    }
+
+    const callName = block.name.toLowerCase();
+    if (callName === "set") {
+      applySetVariable(block.body, variables);
+      continue;
+    }
+    if (callName === "string") {
+      applyStringReplaceVariable(block.body, variables);
+    }
+  }
+
+  return variables;
+}
+
+function applySetVariable(body: string, variables: Map<string, string>) {
+  const tokens = tokenizeCmake(body);
+  if (tokens.length < 2) return;
+
+  const variableName = tokens[0];
+  if (!isCmakeVariableName(variableName)) return;
+
+  const cacheIndex = tokens.findIndex((token) => token.toUpperCase() === "CACHE");
+  const valueTokens = cacheIndex > 1
+    ? tokens.slice(1, cacheIndex)
+    : tokens.slice(1);
+  if (valueTokens.length === 0) return;
+
+  variables.set(variableName, resolveKnownPlaceholders(valueTokens.join(" "), variables));
+}
+
+function applyStringReplaceVariable(body: string, variables: Map<string, string>) {
+  const tokens = tokenizeCmake(body);
+  if (tokens.length < 5) return;
+  if (tokens[0].toUpperCase() !== "REPLACE") return;
+
+  const match = resolveKnownPlaceholders(tokens[1], variables);
+  const replacement = resolveKnownPlaceholders(tokens[2], variables);
+  const outVariable = tokens[3];
+  if (!isCmakeVariableName(outVariable)) return;
+
+  const input = resolveKnownPlaceholders(tokens.slice(4).join(" "), variables);
+  if (match.length === 0) {
+    variables.set(outVariable, input);
+    return;
+  }
+
+  variables.set(outVariable, input.split(match).join(replacement));
+}
+
+function isCmakeVariableName(value: string): boolean {
+  return /^[A-Za-z_][A-Za-z0-9_]*$/.test(value);
+}
+
+function resolveKnownPlaceholders(input: string, variables: Map<string, string>): string {
+  let resolved = input;
+  for (let pass = 0; pass < 8; pass++) {
+    const next = resolved.replace(CMAKE_PLACEHOLDER_RE, (fullMatch, variableName: string) => {
+      const mapped = variables.get(variableName);
+      return mapped !== undefined ? mapped : fullMatch;
+    });
+    if (next === resolved) {
+      return next;
+    }
+    resolved = next;
+  }
+  return resolved;
 }
 
 function containsUnresolvedPlaceholder(value: string): boolean {

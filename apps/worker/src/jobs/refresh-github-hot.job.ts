@@ -74,6 +74,7 @@ async function refreshHotRepos() {
           batchNumber: 1,
           snapshotAsOf,
           repo,
+          readmeSourceMode: config.GITHUB_README_SOURCE_MODE,
         });
 
         processed++;

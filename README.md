@@ -145,6 +145,7 @@ Copy `.env.example` to `.env`.
 | `VCPKG_REPO_URL` | Registry remote URL                                                 |
 | `VCPKG_BRANCH`   | Registry branch to index                                            |
 | `GITHUB_TOKEN`   | Optional token for upstream enrichment and higher GitHub API limits |
+| `GITHUB_README_SOURCE_MODE` | README source strategy: `snapshot` (default, package-pinned ref) or `latest` (default branch) |
 | `PORT` / `HOST`  | Fastify bind settings                                               |
 
 ## How indexing works

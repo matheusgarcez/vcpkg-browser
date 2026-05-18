@@ -57,24 +57,21 @@ function describeGraphqlBudgetStatus(args: {
   const etaMs = reposPerMinute > 0 ? (remainingRepos / reposPerMinute) * 60_000 : 0;
   const resetMs = Math.max(new Date(latestRateLimit.resetAt).getTime() - Date.now(), 0);
 
-  let forecast = `finish ${projectedRemaining >= 0 ? "before" : "after"} current budget`;
+  let forecast = projectedRemaining >= 0 ? "within current budget window" : "likely after current budget window";
   if (projectedRemaining < 0 && averageCostPerRepo > 0 && reposPerMinute > 0) {
     const reposUntilExhaustion = Math.floor(latestRateLimit["x-ratelimit-remaining"] / averageCostPerRepo);
     const exhaustMs = (reposUntilExhaustion / reposPerMinute) * 60_000;
-    forecast = `budget exhaust in ~${reposUntilExhaustion} repos / ${formatDuration(exhaustMs)}`;
+    forecast = `budget exhaustion in ~${reposUntilExhaustion} repos (${formatDuration(exhaustMs)})`;
   }
 
   return [
-    `GraphQL status: cost ${totalGraphqlCost} total`,
-    `avg ${averageCostPerRepo.toFixed(2)}/repo`,
-    `remaining ${latestRateLimit["x-ratelimit-remaining"]}/${latestRateLimit["x-ratelimit-limit"]}`,
-    `used ${latestRateLimit["x-ratelimit-used"]}`,
-    `reset ${latestRateLimit.resetAt}`,
-    `eta ${formatDuration(etaMs)}`,
-    `reset-in ${formatDuration(resetMs)}`,
-    `projected-finish-cost ${projectedCostToFinish}`,
-    forecast,
-  ].join(", ");
+    `GraphQL budget: ${latestRateLimit["x-ratelimit-remaining"]}/${latestRateLimit["x-ratelimit-limit"]} remaining (used ${latestRateLimit["x-ratelimit-used"]})`,
+    `avg cost ${averageCostPerRepo.toFixed(2)}/repo`,
+    `projected need ${projectedCostToFinish}`,
+    `ETA ${formatDuration(etaMs)}`,
+    `reset ${latestRateLimit.resetAt} (in ${formatDuration(resetMs)})`,
+    `forecast: ${forecast}`,
+  ].join(" | ");
 }
 
 function githubRepoIdentityFilter() {
@@ -193,6 +190,7 @@ async function refreshAllRepos(options: RefreshGitHubFullJobOptions) {
             batchNumber,
             snapshotAsOf,
             repo,
+            readmeSourceMode: config.GITHUB_README_SOURCE_MODE,
           });
 
           if (result.archiveRecord) {

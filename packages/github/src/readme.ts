@@ -10,7 +10,8 @@ export type ReadmeResult = {
 export async function fetchReadme(
   owner: string,
   repo: string,
-  etag?: string
+  etag?: string,
+  ref?: string,
 ): Promise<ReadmeResult> {
   const client = getClient();
   const headers: Record<string, string> = {};
@@ -20,6 +21,7 @@ export async function fetchReadme(
     const response = await client.rest.repos.getReadme({
       owner,
       repo,
+      ref,
       mediaType: { format: "raw" },
       headers,
     });
@@ -39,7 +41,8 @@ export async function fetchReadme(
       return { content: "", etag, notModified: true };
     }
     if (isGitHubQuotaError(err)) {
-      throw toGitHubQuotaError(err, `README for ${owner}/${repo}`);
+      const sourceLabel = ref ? `${owner}/${repo}@${ref}` : `${owner}/${repo}`;
+      throw toGitHubQuotaError(err, `README for ${sourceLabel}`);
     }
     return { content: "", notModified: false };
   }

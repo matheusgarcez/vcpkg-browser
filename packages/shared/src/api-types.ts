@@ -23,6 +23,9 @@ export type UpstreamDto = {
   latestReleaseUrl?: string;
   latestReleaseIsDraft?: boolean;
   latestReleaseIsPrerelease?: boolean;
+  latestTagName?: string;
+  latestTagPublishedAt?: string;
+  latestTagUrl?: string;
   lastCommitAt?: string;
   archived?: boolean;
   disabled?: boolean;

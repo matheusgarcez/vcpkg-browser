@@ -1,4 +1,4 @@
-import { getClient, upstreamIssues, upstreamRepositories } from "@pkg/db";
+import { getClient, portSourceProvenance, upstreamIssues, upstreamRepositories } from "@pkg/db";
 import {
   fetchReadme,
   fetchRepoRefreshSnapshot,
@@ -17,6 +17,7 @@ export type RefreshGitHubRepoArgs = {
   batchNumber: number;
   snapshotAsOf: Date;
   repo: GitHubRepositoryRow;
+  readmeSourceMode?: "snapshot" | "latest";
 };
 
 export type RefreshGitHubRepoResult = {
@@ -58,6 +59,9 @@ export function clearedUpstreamMetadata(now: string) {
     latestReleaseUrl: null,
     latestReleaseIsDraft: null,
     latestReleaseIsPrerelease: null,
+    latestTagName: null,
+    latestTagPublishedAt: null,
+    latestTagUrl: null,
     pushedAt: null,
     lastCommitAt: null,
     archived: null,
@@ -95,6 +99,7 @@ export async function clearUpstreamMetadataForPort(portName: string, now = new D
 export async function refreshGitHubRepo(args: RefreshGitHubRepoArgs): Promise<RefreshGitHubRepoResult> {
   const db = getClient();
   const { batchNumber, jobName, repo, runId, snapshotAsOf } = args;
+  const readmeSourceMode = args.readmeSourceMode ?? "snapshot";
   let archiveRecord: GitHubGraphqlArchiveRecord | undefined;
 
   try {
@@ -119,8 +124,11 @@ export async function refreshGitHubRepo(args: RefreshGitHubRepoArgs): Promise<Re
     };
 
     const readmeNeeded = shouldRefreshReadme(repo, snapshot.repo.repoUpdatedAt);
+    const readmeRef = readmeSourceMode === "snapshot"
+      ? await resolveSnapshotReadmeRef(repo.portName)
+      : undefined;
     const readmeResult = readmeNeeded
-      ? await fetchReadme(owner, repoName, repo.readmeEtag ?? undefined)
+      ? await fetchReadme(owner, repoName, repo.readmeEtag ?? undefined, readmeRef)
       : null;
 
     const refreshedAt = new Date().toISOString();
@@ -147,6 +155,9 @@ export async function refreshGitHubRepo(args: RefreshGitHubRepoArgs): Promise<Re
       latestReleaseUrl: snapshot.repo.latestReleaseUrl || null,
       latestReleaseIsDraft: snapshot.repo.latestReleaseTag ? snapshot.repo.latestReleaseIsDraft : null,
       latestReleaseIsPrerelease: snapshot.repo.latestReleaseTag ? snapshot.repo.latestReleaseIsPrerelease : null,
+      latestTagName: snapshot.repo.latestTagName || null,
+      latestTagPublishedAt: snapshot.repo.latestTagPublishedAt || null,
+      latestTagUrl: snapshot.repo.latestTagUrl || null,
       pushedAt: snapshot.repo.pushedAt,
       lastCommitAt: snapshot.repo.lastCommitAt,
       archived: snapshot.repo.archived,
@@ -236,4 +247,26 @@ export async function refreshGitHubRepo(args: RefreshGitHubRepoArgs): Promise<Re
       readmeUpdated: false,
     };
   }
+}
+
+async function resolveSnapshotReadmeRef(portName: string): Promise<string | undefined> {
+  const db = getClient();
+  const row = await db
+    .select({
+      ref: portSourceProvenance.ref,
+      refKind: portSourceProvenance.refKind,
+      provider: portSourceProvenance.provider,
+    })
+    .from(portSourceProvenance)
+    .where(eq(portSourceProvenance.portName, portName))
+    .limit(1)
+    .then((rows) => rows[0] ?? null);
+
+  if (!row || row.provider !== "github" || !row.ref) return undefined;
+  if (!isReadmeResolvableRefKind(row.refKind)) return undefined;
+  return row.ref;
+}
+
+function isReadmeResolvableRefKind(refKind: string | null): boolean {
+  return refKind === "commit" || refKind === "tag" || refKind === "branch" || refKind === "release";
 }

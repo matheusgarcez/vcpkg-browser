@@ -29,6 +29,7 @@ describe("database migrations", () => {
     const columns = sqlite.prepare("PRAGMA table_info(upstream_repositories)").all() as Array<{ name: string }>;
 
     expect(columns.some((column) => column.name === "repo_updated_at")).toBe(true);
+    expect(columns.some((column) => column.name === "latest_tag_name")).toBe(true);
 
     sqlite.close();
   });

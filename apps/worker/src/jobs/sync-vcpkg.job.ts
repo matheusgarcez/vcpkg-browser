@@ -635,6 +635,7 @@ async function refreshReposAfterSync(
         batchNumber: 1 + Math.floor(index / Math.max(config.GITHUB_FULL_REFRESH_BATCH_SIZE, 1)),
         snapshotAsOf,
         repo,
+        readmeSourceMode: config.GITHUB_README_SOURCE_MODE,
       });
 
       processed++;

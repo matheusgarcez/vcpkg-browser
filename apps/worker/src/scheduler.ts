@@ -33,6 +33,7 @@ export function startScheduler(config: WorkerConfig) {
         DATABASE_FILE: config.DATABASE_FILE,
         VCPKG_REPO_DIR: config.VCPKG_REPO_DIR,
         GITHUB_TOKEN: config.GITHUB_TOKEN,
+        GITHUB_README_SOURCE_MODE: config.GITHUB_README_SOURCE_MODE,
         VCPKG_REPO_URL: config.VCPKG_REPO_URL,
         VCPKG_BRANCH: config.VCPKG_BRANCH,
       },

@@ -50,6 +50,13 @@
       "when": 1778689225561,
       "tag": "0006_packaging_signals",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1779067000000,
+      "tag": "0007_upstream_latest_tags",
+      "breakpoints": true
     }
   ]
 }

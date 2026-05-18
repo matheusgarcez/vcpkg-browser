@@ -112,22 +112,24 @@ function getUpstreamLagInfo(
   const registrySyncDate = getRegistrySyncDate(port);
   if (!registrySyncDate) return null;
 
-  const latestReleaseDate = parseOptionalDate(upstream.latestReleasePublishedAt);
+  const latestKnownVersion = upstream.latestReleaseTag ?? upstream.latestTagName;
+  const latestKnownPublishedAt = upstream.latestReleasePublishedAt ?? upstream.latestTagPublishedAt;
+  const latestReleaseDate = parseOptionalDate(latestKnownPublishedAt);
   const lastCommitDate = parseOptionalDate(upstream.lastCommitAt);
-  const exactReleaseMatch = versionsClearlyMatch(port.version, upstream.latestReleaseTag);
+  const exactReleaseMatch = versionsClearlyMatch(port.version, latestKnownVersion);
 
-  if (!exactReleaseMatch && upstream.latestReleaseTag && latestReleaseDate) {
+  if (!exactReleaseMatch && latestKnownVersion && latestReleaseDate) {
     const lagDays = Math.floor((latestReleaseDate.getTime() - registrySyncDate.getTime()) / DAY_MS);
     if (lagDays >= 60) {
       return {
         kind: "release-lag",
-        title: "vcpkg may lag behind the latest upstream release",
-        detail: `vcpkg is on ${port.version}, while upstream released ${upstream.latestReleaseTag} about ${formatLagDays(lagDays)} after the last vcpkg update.`,
+        title: "vcpkg may lag behind the latest upstream version",
+        detail: `vcpkg is on ${port.version}, while upstream is at ${latestKnownVersion} about ${formatLagDays(lagDays)} after the last vcpkg update.`,
       };
     }
   }
 
-  if (!upstream.latestReleaseTag && lastCommitDate) {
+  if (!latestKnownVersion && lastCommitDate) {
     const lagDays = Math.floor((lastCommitDate.getTime() - registrySyncDate.getTime()) / DAY_MS);
     if (lagDays >= 180) {
       return {
@@ -818,6 +820,17 @@ function UpstreamTabContent({
                 <ExternalLink className="h-4 w-4" />
               </a>
             ) : null}
+            {upstream.latestTagUrl && upstream.latestTagUrl !== upstream.latestReleaseUrl ? (
+              <a
+                href={upstream.latestTagUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-3 py-2 text-sm text-[var(--color-text)] transition-colors hover:border-[var(--color-border-strong)]"
+              >
+                Latest tag
+                <ExternalLink className="h-4 w-4" />
+              </a>
+            ) : null}
           </div>
         </div>
 
@@ -904,6 +917,25 @@ function UpstreamTabContent({
                     {formatDate(upstream.latestReleasePublishedAt)}
                     {upstream.latestReleaseIsPrerelease ? " | prerelease" : ""}
                     {upstream.latestReleaseIsDraft ? " | draft" : ""}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+            {upstream.latestTagName ? (
+              <div>
+                <div className="mb-1 text-xs text-[var(--color-text-secondary)]">Latest tag</div>
+                <div className="text-sm">
+                  {upstream.latestTagUrl ? (
+                    <a href={upstream.latestTagUrl} target="_blank" rel="noopener noreferrer" className="text-[var(--color-primary)] hover:underline">
+                      {upstream.latestTagName}
+                    </a>
+                  ) : (
+                    upstream.latestTagName
+                  )}
+                </div>
+                {upstream.latestTagPublishedAt ? (
+                  <div className="mt-1 text-xs text-[var(--color-text-secondary)]">
+                    {formatDate(upstream.latestTagPublishedAt)}
                   </div>
                 ) : null}
               </div>
@@ -1124,14 +1156,16 @@ export function PortDetail() {
   const sourceReference = buildSourceReferenceInfo(port);
   const tabs: Array<{ value: TabName; label: string }> = [
     { value: "readme", label: "README" },
-    { value: "versions", label: "Versions" },
-    { value: "features", label: "Features" },
     { value: "dependencies", label: "Dependencies" },
-    { value: "files", label: "Files" },
   ];
   if (port.view !== "historical") {
     tabs.push({ value: "upstream", label: "Upstream" });
   }
+  tabs.push(
+    { value: "features", label: "Features" },
+    { value: "versions", label: "Versions" },
+    { value: "files", label: "Files" },
+  );
 
   const activeTab = port.view === "historical" && tab === "upstream" ? "readme" : tab;
   const selectedVersion = port.selectedVersion ?? { version: port.version, portVersion: port.portVersion };
@@ -1215,13 +1249,25 @@ export function PortDetail() {
           ) : null}
           {port.upstream?.latestReleaseTag ? (
             <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5">
-              <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">Latest</span>
+              <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">Release</span>
               {port.upstream.latestReleaseUrl ? (
                 <a href={port.upstream.latestReleaseUrl} target="_blank" rel="noopener noreferrer" className="text-[var(--color-primary)] hover:underline">
                   {port.upstream.latestReleaseTag}
                 </a>
               ) : (
                 port.upstream.latestReleaseTag
+              )}
+            </span>
+          ) : null}
+          {port.upstream?.latestTagName && port.upstream.latestTagName !== port.upstream.latestReleaseTag ? (
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5">
+              <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">Tag</span>
+              {port.upstream.latestTagUrl ? (
+                <a href={port.upstream.latestTagUrl} target="_blank" rel="noopener noreferrer" className="text-[var(--color-primary)] hover:underline">
+                  {port.upstream.latestTagName}
+                </a>
+              ) : (
+                port.upstream.latestTagName
               )}
             </span>
           ) : null}
@@ -1428,7 +1474,7 @@ export function PortDetail() {
                     {port.upstream?.mergedPrs30d !== undefined ? <InfoRow label="Merged in 30d" value={port.upstream.mergedPrs30d.toLocaleString()} /> : null}
                   </SidebarSection>
                 ) : null}
-                {(port.upstream?.latestReleaseTag || port.upstream?.lastCommitAt) ? (
+                {(port.upstream?.latestReleaseTag || port.upstream?.latestTagName || port.upstream?.lastCommitAt) ? (
                   <SidebarSection>
                     {port.upstream?.latestReleaseTag ? (
                       <InfoRow
@@ -1441,6 +1487,21 @@ export function PortDetail() {
                             </a>
                           ) : (
                             port.upstream.latestReleaseTag
+                          )
+                        }
+                      />
+                    ) : null}
+                    {port.upstream?.latestTagName ? (
+                      <InfoRow
+                        label="Latest tag"
+                        layout="stacked"
+                        value={
+                          port.upstream.latestTagUrl ? (
+                            <a href={port.upstream.latestTagUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-[var(--color-primary)] hover:underline">
+                              {port.upstream.latestTagName}
+                            </a>
+                          ) : (
+                            port.upstream.latestTagName
                           )
                         }
                       />
@@ -1478,22 +1539,6 @@ export function PortDetail() {
                     </div>
                   </div>
                 ) : null}
-                {port.view !== "historical" && port.registryStats ? (
-                  <div>
-                    <div className="text-[var(--color-text-secondary)] mb-1">Churn in 90d</div>
-                    <div className="text-[var(--color-text-secondary)]">
-                      {port.registryStats.churn90d} change{port.registryStats.churn90d === 1 ? "" : "s"}
-                    </div>
-                  </div>
-                ) : null}
-                {port.view !== "historical" && port.registryStats?.sameVersionPortBumps ? (
-                  <div>
-                    <div className="text-[var(--color-text-secondary)] mb-1">Port-version bumps</div>
-                    <div className="text-[var(--color-text-secondary)]">
-                      {port.registryStats.sameVersionPortBumps}
-                    </div>
-                  </div>
-                ) : null}
                 {port.vcpkgUpdatedAt ? (
                   <div>
                     <div className="text-[var(--color-text-secondary)] mb-1">vcpkg updated</div>
@@ -1518,6 +1563,22 @@ export function PortDetail() {
                     <div className="flex items-center gap-1.5 text-[var(--color-text-secondary)]">
                       <CalendarDays className="w-3.5 h-3.5 shrink-0" />
                       {formatDate(port.updatedInRegistryAt)}
+                    </div>
+                  </div>
+                ) : null}
+                {port.view !== "historical" && port.registryStats ? (
+                  <div>
+                    <div className="text-[var(--color-text-secondary)] mb-1">Churn in 90d</div>
+                    <div className="text-[var(--color-text-secondary)]">
+                      {port.registryStats.churn90d} change{port.registryStats.churn90d === 1 ? "" : "s"}
+                    </div>
+                  </div>
+                ) : null}
+                {port.view !== "historical" && port.registryStats?.sameVersionPortBumps ? (
+                  <div>
+                    <div className="text-[var(--color-text-secondary)] mb-1">Port-version bumps</div>
+                    <div className="text-[var(--color-text-secondary)]">
+                      {port.registryStats.sameVersionPortBumps}
                     </div>
                   </div>
                 ) : null}

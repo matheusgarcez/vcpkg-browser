@@ -24,6 +24,9 @@ export type RepoMetadata = {
   latestReleaseUrl: string;
   latestReleaseIsDraft: boolean;
   latestReleaseIsPrerelease: boolean;
+  latestTagName: string;
+  latestTagPublishedAt: string;
+  latestTagUrl: string;
   pushedAt: string;
   lastCommitAt: string;
   archived: boolean;
@@ -103,6 +106,24 @@ type RepoSnapshotResponse = {
       isDraft: boolean;
       isPrerelease: boolean;
     } | null;
+    latestTagRef: {
+      nodes: Array<{
+        name: string;
+        target: {
+          __typename: string;
+          committedDate?: string | null;
+          oid?: string | null;
+          tagger?: {
+            date: string | null;
+          } | null;
+          target?: {
+            __typename: string;
+            committedDate?: string | null;
+            oid?: string | null;
+          } | null;
+        } | null;
+      } | null>;
+    };
     defaultBranchRef: { name: string } | null;
     defaultBranchTarget: {
       committedDate: string;
@@ -179,6 +200,9 @@ export async function fetchRepoMetadata(
         latestReleaseUrl: "",
         latestReleaseIsDraft: false,
         latestReleaseIsPrerelease: false,
+        latestTagName: "",
+        latestTagPublishedAt: "",
+        latestTagUrl: "",
         pushedAt: d.pushed_at ?? "",
         lastCommitAt: d.pushed_at ?? "",
         archived: d.archived ?? false,
@@ -249,6 +273,30 @@ export async function fetchRepoRefreshSnapshot(
               isDraft
               isPrerelease
             }
+            latestTagRef: refs(refPrefix: "refs/tags/", first: 1, orderBy: { field: TAG_COMMIT_DATE, direction: DESC }) {
+              nodes {
+                name
+                target {
+                  __typename
+                  ... on Commit {
+                    committedDate
+                    oid
+                  }
+                  ... on Tag {
+                    tagger {
+                      date
+                    }
+                    target {
+                      __typename
+                      ... on Commit {
+                        committedDate
+                        oid
+                      }
+                    }
+                  }
+                }
+              }
+            }
             defaultBranchRef {
               name
               target {
@@ -313,6 +361,19 @@ export async function fetchRepoRefreshSnapshot(
       throw new Error(`Repository ${owner}/${repo} not found`);
     }
 
+    const latestTagNode = response.repository.latestTagRef.nodes.find((node) => !!node?.name) ?? null;
+    const latestTagName = latestTagNode?.name ?? "";
+    const latestTagPublishedAt = resolveLatestTagPublishedAt(latestTagNode) ?? "";
+    const latestTagUrl = latestTagName
+      ? `https://github.com/${owner}/${repo}/tree/${encodeURIComponent(latestTagName)}`
+      : "";
+
+    const latestReleaseTag = response.repository.latestRelease?.tagName ?? "";
+    const latestReleasePublishedAt = response.repository.latestRelease?.publishedAt ?? "";
+    const latestReleaseUrl = response.repository.latestRelease?.url ?? "";
+    const latestReleaseIsDraft = response.repository.latestRelease?.isDraft ?? false;
+    const latestReleaseIsPrerelease = response.repository.latestRelease?.isPrerelease ?? false;
+
     return {
       repo: {
         stars: response.repository.stargazerCount ?? 0,
@@ -329,11 +390,14 @@ export async function fetchRepoRefreshSnapshot(
         primaryLanguage: response.repository.primaryLanguage?.name ?? "",
         primaryLanguageColor: response.repository.primaryLanguage?.color ?? "",
         topics: response.repository.repositoryTopics.nodes.flatMap((node) => node?.topic?.name ? [node.topic.name] : []),
-        latestReleaseTag: response.repository.latestRelease?.tagName ?? "",
-        latestReleasePublishedAt: response.repository.latestRelease?.publishedAt ?? "",
-        latestReleaseUrl: response.repository.latestRelease?.url ?? "",
-        latestReleaseIsDraft: response.repository.latestRelease?.isDraft ?? false,
-        latestReleaseIsPrerelease: response.repository.latestRelease?.isPrerelease ?? false,
+        latestReleaseTag,
+        latestReleasePublishedAt,
+        latestReleaseUrl,
+        latestReleaseIsDraft,
+        latestReleaseIsPrerelease,
+        latestTagName,
+        latestTagPublishedAt,
+        latestTagUrl,
         pushedAt: response.repository.pushedAt ?? "",
         lastCommitAt: response.repository.defaultBranchTarget?.committedDate ?? response.repository.pushedAt ?? "",
         archived: response.repository.isArchived ?? false,
@@ -377,6 +441,30 @@ export async function fetchRepoRefreshSnapshot(
     }
     throw err;
   }
+}
+
+function resolveLatestTagPublishedAt(
+  tagNode: NonNullable<RepoSnapshotResponse["repository"]>["latestTagRef"]["nodes"][number] | null,
+): string | undefined {
+  const target = tagNode?.target;
+  if (!target) return undefined;
+
+  if (target.__typename === "Commit" && target.committedDate) {
+    return target.committedDate;
+  }
+
+  if (target.__typename === "Tag") {
+    if (target.tagger?.date) {
+      return target.tagger.date;
+    }
+
+    const nested = target.target;
+    if (nested?.__typename === "Commit" && nested.committedDate) {
+      return nested.committedDate;
+    }
+  }
+
+  return undefined;
 }
 
 export async function fetchRepoPrs(
