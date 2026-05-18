@@ -18,7 +18,19 @@ import {
   packagingRiskScores,
 } from "@pkg/db";
 import { createGitHubClient } from "@pkg/github";
-import { parseManifest, normalizeDescription, normalizeVersion, parseDependencies, parseFeatures, normalizeVersionEntry, parseUsage, normalizeVersionDateValue } from "@pkg/vcpkg-parser";
+import {
+  MAX_INLINE_PORT_FILE_BYTES,
+  classifyPortFilePath,
+  isLikelyTextBuffer,
+  normalizeDescription,
+  normalizeVersion,
+  normalizeVersionDateValue,
+  normalizeVersionEntry,
+  parseDependencies,
+  parseFeatures,
+  parseManifest,
+  parseUsage,
+} from "@pkg/vcpkg-parser";
 import { detectUpstream } from "@pkg/vcpkg-parser";
 import { evaluateSupports } from "@pkg/vcpkg-parser";
 import simpleGit from "simple-git";
@@ -249,7 +261,8 @@ async function getLatestRepoRelease(): Promise<LatestRepoRelease | null> {
 interface PortFileEntry {
   fileType: string;
   path: string;
-  content: string;
+  content?: string;
+  sizeBytes?: number;
 }
 
 interface ParsedPort {
@@ -273,27 +286,43 @@ interface ParsedPort {
   files: PortFileEntry[];
 }
 
-async function collectPatchFileEntries(portDir: string, relativeDir = ""): Promise<PortFileEntry[]> {
-  const patchEntries: PortFileEntry[] = [];
-  const entries = await fs.readdir(path.join(portDir, relativeDir), { withFileTypes: true });
+async function collectPortFileEntries(portDir: string, relativeDir = ""): Promise<PortFileEntry[]> {
+  const fileEntries: PortFileEntry[] = [];
+  const entries = (await fs.readdir(path.join(portDir, relativeDir), { withFileTypes: true }))
+    .sort((left, right) => left.name.localeCompare(right.name));
 
   for (const entry of entries) {
     const nextRelativePath = relativeDir ? path.posix.join(relativeDir, entry.name) : entry.name;
 
     if (entry.isDirectory()) {
-      patchEntries.push(...await collectPatchFileEntries(portDir, nextRelativePath));
+      fileEntries.push(...await collectPortFileEntries(portDir, nextRelativePath));
       continue;
     }
 
-    if (!/\.(patch|diff)$/i.test(entry.name)) {
+    if (!entry.isFile()) {
       continue;
     }
 
-    const patchContent = await fs.readFile(path.join(portDir, nextRelativePath), "utf-8");
-    patchEntries.push({ fileType: "patch", path: nextRelativePath, content: patchContent });
+    const absolutePath = path.join(portDir, nextRelativePath);
+    const stat = await fs.stat(absolutePath);
+
+    let content: string | undefined;
+    if (stat.size <= MAX_INLINE_PORT_FILE_BYTES) {
+      const fileBuffer = await fs.readFile(absolutePath);
+      if (isLikelyTextBuffer(fileBuffer)) {
+        content = fileBuffer.toString("utf-8");
+      }
+    }
+
+    fileEntries.push({
+      fileType: classifyPortFilePath(nextRelativePath),
+      path: nextRelativePath,
+      content,
+      sizeBytes: stat.size,
+    });
   }
 
-  return patchEntries;
+  return fileEntries;
 }
 
 async function parsePortsDir(): Promise<ParsedPort[]> {
@@ -309,29 +338,29 @@ async function parsePortsDir(): Promise<ParsedPort[]> {
     const portDir = path.join(portsDir, entry.name);
     try {
       const manifestPath = path.join(portDir, "vcpkg.json");
-      const manifestContent = await fs.readFile(manifestPath, "utf-8");
+      const files = await collectPortFileEntries(portDir);
+      const manifestContent =
+        files.find((file) => file.path === "vcpkg.json")?.content
+        ?? await fs.readFile(manifestPath, "utf-8");
       const manifest = parseManifest(manifestContent);
 
-      const files: PortFileEntry[] = [
-        { fileType: "manifest", path: "vcpkg.json", content: manifestContent },
-      ];
-
       let portfileText: string | undefined;
-      try {
-        portfileText = await fs.readFile(path.join(portDir, "portfile.cmake"), "utf-8");
-        files.push({ fileType: "portfile", path: "portfile.cmake", content: portfileText });
-      } catch { /* no portfile */ }
+      portfileText = files.find((file) => file.path === "portfile.cmake")?.content;
+      if (portfileText == null) {
+        try {
+          portfileText = await fs.readFile(path.join(portDir, "portfile.cmake"), "utf-8");
+        } catch { /* no portfile */ }
+      }
 
       let usageText: string | undefined;
-      try {
-        const usageFile = await fs.readFile(path.join(portDir, "usage"), "utf-8");
+      const usageFile = files.find((file) => file.path === "usage")?.content;
+      if (usageFile != null) {
         usageText = parseUsage(usageFile);
-        files.push({ fileType: "usage", path: "usage", content: usageFile });
-      } catch { /* no usage file */ }
-
-      try {
-        files.push(...await collectPatchFileEntries(portDir));
-      } catch { /* can't scan dir */ }
+      } else {
+        try {
+          usageText = parseUsage(await fs.readFile(path.join(portDir, "usage"), "utf-8"));
+        } catch { /* no usage file */ }
+      }
 
       const upstream = detectUpstream(portfileText, manifest.homepage);
       const deps = parseDependencies(manifest.dependencies);
@@ -902,9 +931,9 @@ async function syncVcpkg(forceSync = false) {
               portName: pp.name,
               fileType: file.fileType,
               path: file.path,
-              content: file.content,
-              sizeBytes: Buffer.byteLength(file.content, "utf-8"),
-              sha256: sha256(file.content),
+              content: file.content ?? null,
+              sizeBytes: file.sizeBytes ?? (file.content ? Buffer.byteLength(file.content, "utf-8") : null),
+              sha256: file.content ? sha256(file.content) : null,
               updatedAt: now,
             });
           } catch (e) { console.error(`file insert failed for ${pp.name} file ${fii}:`, e); throw e; }

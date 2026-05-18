@@ -1089,7 +1089,7 @@ export async function getPortDetail(
     db.select().from(portDependencies).where(eq(portDependencies.portName, name)),
     db.select().from(portFeatures).where(eq(portFeatures.portName, name)),
     db.select().from(portVersions).where(eq(portVersions.portName, name)).orderBy(asc(portVersions.id)),
-    db.select().from(portFiles).where(eq(portFiles.portName, name)),
+    db.select().from(portFiles).where(eq(portFiles.portName, name)).orderBy(asc(portFiles.path)),
     db.select().from(upstreamRepositories).where(eq(upstreamRepositories.portName, name)).limit(1).then(r => r[0] ?? null),
     db.select().from(maintenanceScores).where(eq(maintenanceScores.portName, name)).limit(1).then(r => r[0] ?? null),
     db.select().from(portPatchStats).where(eq(portPatchStats.portName, name)).limit(1).then(r => r[0] ?? null),
@@ -1126,7 +1126,7 @@ export async function getPortDetail(
 
   let detailDependencies = deps.map(mapDependencyDto);
   let detailFeatures = feats.map(mapFeatureDto);
-  let detailFiles = files.map((file) => mapPortFileDto(file, file.path === "portfile.cmake"));
+  let detailFiles = files.map((file) => mapPortFileDto(file, false));
   let detailManifest: unknown = port.manifestJson ? JSON.parse(port.manifestJson) : {};
   let detailUsage = port.usageText ? parseUsage(port.usageText) : undefined;
   let detailDescription = port.description ?? undefined;
@@ -1145,10 +1145,7 @@ export async function getPortDetail(
 
     detailDependencies = snapshot.dependencies;
     detailFeatures = snapshot.features;
-    detailFiles = snapshot.files.map((file) => ({
-      ...file,
-      content: file.path === "portfile.cmake" ? file.content : undefined,
-    }));
+    detailFiles = snapshot.files;
     detailManifest = snapshot.manifest;
     detailUsage = snapshot.usage;
     detailDescription = snapshot.description;
@@ -1256,7 +1253,7 @@ export async function getPortDeps(name: string): Promise<DependencyDto[]> {
 
 export async function getPortFilesList(name: string): Promise<PortFileDto[]> {
   const db = getClient();
-  const files = await db.select().from(portFiles).where(eq(portFiles.portName, name));
+  const files = await db.select().from(portFiles).where(eq(portFiles.portName, name)).orderBy(asc(portFiles.path));
   return files.map((file) => mapPortFileDto(file, false));
 }
 

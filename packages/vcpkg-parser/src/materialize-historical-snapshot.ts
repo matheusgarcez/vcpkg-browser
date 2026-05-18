@@ -1,6 +1,7 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { parseDependencies, parseFeatures, parseManifest, normalizeDescription } from "./parse-manifest.js";
+import { MAX_INLINE_PORT_FILE_BYTES, classifyPortFilePath, isLikelyTextBuffer } from "./port-files.js";
 import { parseUsage } from "./parse-usage.js";
 
 const execFileAsync = promisify(execFile);
@@ -82,14 +83,6 @@ async function resolveTreeish(repoDir: string, gitTree: string): Promise<string>
   throw new InvalidHistoricalTreeError(`Historical git object is not a tree or commit: ${gitTree} (${objectType})`);
 }
 
-function classifyFile(path: string): string {
-  if (path === "vcpkg.json") return "manifest";
-  if (path === "portfile.cmake") return "portfile";
-  if (path === "usage") return "usage";
-  if (/\.(patch|diff)$/i.test(path)) return "patch";
-  return "file";
-}
-
 function parseGitTreeEntries(output: string): GitTreeEntry[] {
   return output
     .split("\u0000")
@@ -167,7 +160,7 @@ export async function materializeHistoricalSnapshot(
 
   const now = new Date().toISOString();
   const files: HistoricalSnapshotFile[] = treeEntries.map((entry) => ({
-    fileType: classifyFile(entry.path),
+    fileType: classifyPortFilePath(entry.path),
     path: entry.path,
     sizeBytes: entry.sizeBytes,
     updatedAt: now,
@@ -175,20 +168,29 @@ export async function materializeHistoricalSnapshot(
   let manifestContent: string | undefined;
   let controlContent: string | undefined;
   let normalizedUsageText: string | undefined;
-  const fetchPaths = ["vcpkg.json", "CONTROL", "usage", "portfile.cmake"] as const;
+  const criticalPaths = new Set(["vcpkg.json", "CONTROL", "usage", "portfile.cmake"]);
+  const fetchPaths = files
+    .filter((file) => criticalPaths.has(file.path) || (file.sizeBytes ?? 0) <= MAX_INLINE_PORT_FILE_BYTES)
+    .map((file) => file.path);
 
   await Promise.all(fetchPaths.map(async (relativePath) => {
     const file = files.find((entry) => entry.path === relativePath);
     if (!file) return;
 
-    let content: string;
+    let contentBuffer: Buffer;
     try {
-      content = await runGit(repoDir, ["show", `${treeish}:${relativePath}`]);
+      const { stdout } = await execFileAsync("git", ["-C", repoDir, "show", `${treeish}:${relativePath}`], {
+        encoding: "buffer",
+        maxBuffer: GIT_MAX_BUFFER,
+      });
+      contentBuffer = stdout;
     } catch {
       return;
     }
 
-    if (content.includes("\u0000")) return;
+    if (!isLikelyTextBuffer(contentBuffer)) return;
+    const content = contentBuffer.toString("utf8");
+    const contentSizeBytes = Buffer.byteLength(content, "utf8");
 
     if (relativePath === "vcpkg.json") {
       manifestContent = content;
@@ -196,9 +198,11 @@ export async function materializeHistoricalSnapshot(
       controlContent = content;
     } else if (relativePath === "usage") {
       normalizedUsageText = parseUsage(content);
-    } else if (relativePath === "portfile.cmake") {
+    }
+
+    if (contentSizeBytes <= MAX_INLINE_PORT_FILE_BYTES) {
       file.content = content;
-      file.sizeBytes = Buffer.byteLength(content, "utf8");
+      file.sizeBytes = contentSizeBytes;
     }
   }));
 

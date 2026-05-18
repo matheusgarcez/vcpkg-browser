@@ -583,6 +583,8 @@ type MarkdownModules = {
   remarkGfm: typeof import("remark-gfm").default;
 };
 
+const FILE_CONTENT_LIMIT_KIB = 64;
+
 function MarkdownContent({ content }: { content: string }) {
   const [modules, setModules] = useState<MarkdownModules | null>(null);
 
@@ -668,44 +670,64 @@ function FileRow({
   portName,
   file,
   allowFetch,
+  repoRef,
 }: {
   portName: string;
   file: PortFileDto;
   allowFetch: boolean;
+  repoRef?: string;
 }) {
   const [open, setOpen] = useState(false);
   const shouldFetch = allowFetch && open && !file.content;
   const { data: fetchedFile, isLoading } = usePortFile(portName, shouldFetch ? file.id : 0);
   const content = file.content ?? fetchedFile?.content ?? "";
+  const repoFileUrl = repoRef ? buildVcpkgPortFileUrl(portName, file.path, repoRef) : undefined;
 
   return (
-    <div>
-      <button
-        onClick={() => setOpen((value) => !value)}
-        className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-2 text-left transition-colors hover:border-[var(--color-border-strong)] hover:bg-[var(--color-surface-muted)]"
-      >
-        <div className="flex items-center gap-2 min-w-0">
-          <FileCode className="w-4 h-4 text-[var(--color-text-secondary)] shrink-0" />
-          <span className="text-sm font-mono truncate">{file.path}</span>
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <span className="text-xs px-1.5 py-0.5 border border-[var(--color-border)] rounded text-[var(--color-text-secondary)]">{file.fileType}</span>
-          {file.sizeBytes !== undefined ? (
-            <span className="text-xs text-[var(--color-text-secondary)]">
-              {file.sizeBytes > 1024 ? `${(file.sizeBytes / 1024).toFixed(1)} KB` : `${file.sizeBytes} B`}
-            </span>
-          ) : null}
-        </div>
-      </button>
+    <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] transition-colors hover:border-[var(--color-border-strong)]">
+      <div className="flex items-center gap-2 p-2">
+        <button
+          onClick={() => setOpen((value) => !value)}
+          className="min-w-0 flex-1 text-left"
+        >
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-2">
+              <FileCode className="w-4 h-4 text-[var(--color-text-secondary)] shrink-0" />
+              <span className="text-sm font-mono truncate">{file.path}</span>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="text-xs px-1.5 py-0.5 border border-[var(--color-border)] rounded text-[var(--color-text-secondary)]">{file.fileType}</span>
+              {file.sizeBytes !== undefined ? (
+                <span className="text-xs text-[var(--color-text-secondary)]">
+                  {file.sizeBytes > 1024 ? `${(file.sizeBytes / 1024).toFixed(1)} KB` : `${file.sizeBytes} B`}
+                </span>
+              ) : null}
+            </div>
+          </div>
+        </button>
+        {repoFileUrl ? (
+          <a
+            href={repoFileUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 rounded-md border border-[var(--color-border)] px-2 py-1 text-xs text-[var(--color-text-secondary)] transition-colors hover:border-[var(--color-border-strong)] hover:text-[var(--color-text)]"
+            onClick={(event) => event.stopPropagation()}
+            aria-label={`Open ${file.path} in microsoft/vcpkg`}
+          >
+            Repo
+            <ExternalLink className="w-3 h-3" />
+          </a>
+        ) : null}
+      </div>
       {open ? (
-        <div className="mt-1">
+        <div className="border-t border-[var(--color-border)] px-2 pb-2 pt-1">
           {isLoading && !file.content ? (
             <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-sm text-[var(--color-text-secondary)]">
               Loading file...
             </div>
           ) : !content ? (
             <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-sm text-[var(--color-text-secondary)]">
-              Historical file contents are not materialized for this file.
+              File contents are not stored for this file. Files larger than {FILE_CONTENT_LIMIT_KIB} KiB or binary files are indexed but not materialized.
             </div>
           ) : (
             <CodeBlock code={content} language={file.fileType} maxHeight="28rem" />
@@ -720,10 +742,12 @@ function FilesTabContent({
   portName,
   files,
   allowFetch,
+  repoRef,
 }: {
   portName: string;
   files: PortFileDto[];
   allowFetch: boolean;
+  repoRef?: string;
 }) {
   if (files.length === 0) {
     return (
@@ -736,10 +760,24 @@ function FilesTabContent({
   return (
     <div className="space-y-2">
       {files.map((file) => (
-        <FileRow key={`${file.path}-${file.id}`} portName={portName} file={file} allowFetch={allowFetch} />
+        <FileRow
+          key={`${file.path}-${file.id}`}
+          portName={portName}
+          file={file}
+          allowFetch={allowFetch}
+          repoRef={repoRef}
+        />
       ))}
     </div>
   );
+}
+
+function buildVcpkgPortFileUrl(portName: string, relativePath: string, ref: string): string {
+  const encodedPath = ["ports", portName, ...relativePath.split("/").filter(Boolean)]
+    .map((segment) => encodeURIComponent(segment))
+    .join("/");
+
+  return `${VCPKG_REPO_URL}/blob/${encodeURIComponent(ref)}/${encodedPath}`;
 }
 
 function UpstreamTabContent({
@@ -1346,7 +1384,12 @@ export function PortDetail() {
                 </Tabs.Content>
 
                 <Tabs.Content value="files" className="outline-none">
-                  <FilesTabContent portName={port.name} files={port.files} allowFetch={port.view !== "historical"} />
+                  <FilesTabContent
+                    portName={port.name}
+                    files={port.files}
+                    allowFetch={port.view !== "historical"}
+                    repoRef={port.view === "historical" ? port.registryCommit : VCPKG_DEFAULT_BRANCH}
+                  />
                 </Tabs.Content>
 
                 {port.view !== "historical" ? (

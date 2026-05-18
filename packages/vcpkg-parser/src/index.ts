@@ -6,6 +6,11 @@ export { extractDeclaredPatchPaths, parseSourceProvenance } from "./packaging-si
 export type { ParsedSourceProvenance, SourceProvenanceQuality, SourceProvenanceProvider } from "./packaging-signals.js";
 export { parseUsage } from "./parse-usage.js";
 export {
+  MAX_INLINE_PORT_FILE_BYTES,
+  classifyPortFilePath,
+  isLikelyTextBuffer,
+} from "./port-files.js";
+export {
   parseVersionDatabase,
   parseBaseline,
   parseVersionsArray,
