@@ -8,7 +8,11 @@ export type RepoMetadata = {
   stars: number;
   forks: number;
   openIssues: number;
+  totalIssues: number;
+  issuesEnabled: boolean;
   openPrs: number;
+  totalPrs: number;
+  pullRequestsEnabled: boolean;
   mergedPrs30d: number;
   defaultBranch: string;
   repoCreatedAt: string;
@@ -131,8 +135,12 @@ type RepoSnapshotResponse = {
     pushedAt: string | null;
     isArchived: boolean;
     isDisabled: boolean;
+    hasIssuesEnabled: boolean;
+    hasPullRequestsEnabled: boolean;
     openIssues: { totalCount: number };
+    totalIssues: { totalCount: number };
     openPullRequests: { totalCount: number };
+    totalPullRequests: { totalCount: number };
     closedIssues30d: { totalCount: number };
     topIssues: {
       nodes: Array<{
@@ -184,7 +192,11 @@ export async function fetchRepoMetadata(
         stars: d.stargazers_count ?? 0,
         forks: d.forks_count ?? 0,
         openIssues: d.open_issues_count ?? 0,
+        totalIssues: 0,
+        issuesEnabled: true,
         openPrs: 0,
+        totalPrs: 0,
+        pullRequestsEnabled: true,
         mergedPrs30d: 0,
         defaultBranch: d.default_branch ?? "main",
         repoCreatedAt: d.created_at ?? "",
@@ -315,10 +327,18 @@ export async function fetchRepoRefreshSnapshot(
             pushedAt
             isArchived
             isDisabled
+            hasIssuesEnabled
+            hasPullRequestsEnabled
             openIssues: issues(states: OPEN) {
               totalCount
             }
+            totalIssues: issues {
+              totalCount
+            }
             openPullRequests: pullRequests(states: OPEN) {
+              totalCount
+            }
+            totalPullRequests: pullRequests {
               totalCount
             }
             closedIssues30d: issues(states: CLOSED, filterBy: { since: $since }) {
@@ -379,7 +399,11 @@ export async function fetchRepoRefreshSnapshot(
         stars: response.repository.stargazerCount ?? 0,
         forks: response.repository.forkCount ?? 0,
         openIssues: response.repository.openIssues.totalCount ?? 0,
+        totalIssues: response.repository.totalIssues.totalCount ?? 0,
+        issuesEnabled: response.repository.hasIssuesEnabled,
         openPrs: response.repository.openPullRequests.totalCount ?? 0,
+        totalPrs: response.repository.totalPullRequests.totalCount ?? 0,
+        pullRequestsEnabled: response.repository.hasPullRequestsEnabled,
         mergedPrs30d: response.mergedPullRequests30d.issueCount ?? 0,
         defaultBranch: response.repository.defaultBranchRef?.name ?? "main",
         repoCreatedAt: response.repository.createdAt ?? "",

@@ -57,6 +57,20 @@
       "when": 1779067000000,
       "tag": "0007_upstream_latest_tags",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1779072000000,
+      "tag": "0008_issue_pr_totals",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1779075600000,
+      "tag": "0009_repo_workflow_flags",
+      "breakpoints": true
     }
   ]
 }

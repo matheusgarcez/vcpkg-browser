@@ -30,6 +30,10 @@ describe("database migrations", () => {
 
     expect(columns.some((column) => column.name === "repo_updated_at")).toBe(true);
     expect(columns.some((column) => column.name === "latest_tag_name")).toBe(true);
+    expect(columns.some((column) => column.name === "total_issues")).toBe(true);
+    expect(columns.some((column) => column.name === "total_prs")).toBe(true);
+    expect(columns.some((column) => column.name === "issues_enabled")).toBe(true);
+    expect(columns.some((column) => column.name === "pull_requests_enabled")).toBe(true);
 
     sqlite.close();
   });
